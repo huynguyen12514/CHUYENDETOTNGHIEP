@@ -1,6 +1,3 @@
-//-- HE THONG TUOI NUOC THONG MINH IOT --//
-//CHINH SUA 30/04/2026//
-
 #define BLYNK_TEMPLATE_ID "TMPL6HbYw7dWR"
 #define BLYNK_TEMPLATE_NAME "CDTNHethongtuoinuocthongminhIoT"
 #define BLYNK_AUTH_TOKEN "WAqDl20qBrr-YBDqiL09njva3s_T9pHG"
@@ -10,29 +7,35 @@
 #include <EEPROM.h>
 #include <WiFiManager.h> 
 #include "DHT.h" 
+#include <TimeLib.h>           // Thư viện quản lý thời gian
+#include <WidgetRTC.h>         // Thư viện lấy thời gian thực từ Internet
 
-// --- CẤU HÌNH PHẦN CỨNG (Sơ đồ chân) ---
-const int sensorPin = A0;      // Cảm biến độ ẩm đất nối chân Analog A0
-const int pumpPin = D5;        // Relay điều khiển bơm nối chân D5
-const int flowSensorPin = D2;  // Cảm biến lưu lượng nối chân D2 (có hỗ trợ ngắt)
-#define DHTPIN D6              // Cảm biến DHT11 nối chân D6
-#define DHTTYPE DHT11          // Khai báo loại cảm biến là DHT11
+// --- CẤU HÌNH PHẦN CỨNG ---
+const int sensorPin = A0;      
+const int pumpPin = D5;        
+const int flowSensorPin = D2;  
+#define DHTPIN D6              
+#define DHTTYPE DHT11
 
-DHT dht(DHTPIN, DHTTYPE);      // Khởi tạo đối tượng DHT
+DHT dht(DHTPIN, DHTTYPE);
+WidgetRTC rtc;                 // Khởi tạo bộ lấy giờ thực
 
 // --- BIẾN TOÀN CỤC ---
-volatile long pulseCount = 0;  // Biến đếm xung từ cảm biến nước (volatile để dùng trong ngắt)
-float flowRate = 0.0;          // Tốc độ dòng chảy (Lít/phút)
-float totalLiters = 0.0;       // Tổng lượng nước tích lũy (Lít)
-unsigned long oldTime = 0;     // Biến lưu mốc thời gian để tính toán lưu lượng
-unsigned long lastSendBlynk = 0; // Mốc thời gian gửi dữ liệu lên Blynk
-bool isWarned = false;         // Cờ đánh dấu đã gửi cảnh báo nhiệt độ chưa
+volatile long pulseCount = 0;
+float flowRate = 0.0;
+float totalLiters = 0.0;
+unsigned long oldTime = 0;
+unsigned long lastSendBlynk = 0; 
+bool isWarned = false; 
+
+// Biến quản lý thời gian tưới ưu tiên
+long startSecond, stopSecond; 
+bool isTimePriority = false;   // Cờ kiểm tra có đang trong giờ ưu tiên không
 
 struct PlantProfile {
-  int startT; // Ngưỡng độ ẩm bắt đầu tưới mặc định
+  int startT; 
 };
 
-// Danh sách ngưỡng tưới mặc định cho 12 loại cây trong thư viện
 PlantProfile library[14] = {
   {0},  
   {45}, // 1. Cam / Quyt
@@ -49,151 +52,153 @@ PlantProfile library[14] = {
   {35}, // 12. Hoa giay / Luoi ho
   {40}  // 13. Cay trong tuy chinh (Mac dinh 40%)
 };
-
 int activeStart, activeStop, selectedPlantID = 1;
-int inputThreshold = 0; // Giá trị người dùng nhập từ ô V9
-int compensator = 0;    // Giá trị tưới bù từ thanh trượt V6
+int inputThreshold = 0; 
+int compensator = 0;    
 
-// Hàm ngắt: Mỗi khi có nước chảy qua làm cảm biến xoay, biến này sẽ tăng lên 1
 void IRAM_ATTR pulseCounter() { pulseCount++; }
 
-// --- HÀM TẢI VÀ LƯU DỮ LIỆU CÂY TRỒNG ---
 void loadData(int id) {
   if (id < 1 || id > 13) id = 1;
   selectedPlantID = id;
-  EEPROM.write(50, id); // Lưu lại ID cây đang chọn vào bộ nhớ ô 50
-  
-  // Kiểm tra xem cây này có ngưỡng tùy chỉnh nào đã lưu ở ô (100 + id*2) không
+  EEPROM.write(50, id); 
   int s = EEPROM.read(100 + (id * 2)); 
-  // Nếu ô nhớ trống (255) thì lấy ngưỡng mặc định từ thư viện library
   activeStart = (s > 0 && s <= 100) ? s : library[id].startT;
-  // Ngưỡng tắt tự động bằng ngưỡng bật + 25% để đất đẫm nước và bền bơm
   activeStop = activeStart + 25; 
-  EEPROM.commit(); // Xác nhận lưu vào bộ nhớ Flash
+  EEPROM.commit();
 }
 
-// --- CÁC HÀM XỬ LÝ KHI THAY ĐỔI TRÊN APP BLYNK ---
+// --- XỬ LÝ BLYNK ---
 
-BLYNK_WRITE(V4) { // Khi người dùng chọn loại cây khác trên Menu
-  loadData(param.asInt()); 
-  Blynk.virtualWrite(V3, activeStart); // Cập nhật ngưỡng của cây đó lên App
-}
-
-BLYNK_WRITE(V9) { inputThreshold = param.asInt(); } // Ghi nhận số từ ô nhập liệu
-
-BLYNK_WRITE(V5) { // Khi nhấn nút "Lưu cấu hình"
-  if (param.asInt() == 1 && inputThreshold > 0) {
-    EEPROM.write(100 + (selectedPlantID * 2), inputThreshold); // Ghi ngưỡng mới vào EEPROM
-    EEPROM.commit();
-    activeStart = inputThreshold; 
-    activeStop = activeStart + 25;
-    Blynk.virtualWrite(V3, activeStart); // Cập nhật hiển thị ngưỡng mới
+// MỚI: Nhận khung giờ ưu tiên từ Widget Time Input trên V2
+BLYNK_WRITE(V2) {
+  TimeInputParam t(param);
+  if (t.hasStartTime()) {
+    startSecond = (t.getStartHour() * 3600) + (t.getStartMinute() * 60);
+    stopSecond = (t.getStopHour() * 3600) + (t.getStopMinute() * 60);
+    Serial.println("Đã cập nhật khung giờ ưu tiên!");
   }
 }
 
-BLYNK_WRITE(V10) { // Khi nhấn nút "Xóa" (Reset ngưỡng cây về mặc định của thư viện)
-  if (param.asInt() == 1) {
-    EEPROM.write(100 + (selectedPlantID * 2), 255); // Ghi 255 để đánh dấu là trống
+BLYNK_WRITE(V4) { 
+  loadData(param.asInt()); 
+  Blynk.virtualWrite(V3, activeStart); 
+}
+
+BLYNK_WRITE(V9) { inputThreshold = param.asInt(); } 
+
+BLYNK_WRITE(V5) { 
+  if (param.asInt() == 1 && inputThreshold > 0) {
+    EEPROM.write(100 + (selectedPlantID * 2), inputThreshold);
     EEPROM.commit();
-    loadData(selectedPlantID); // Tải lại dữ liệu (lúc này sẽ lấy từ library)
+    activeStart = inputThreshold; 
+    activeStop = activeStart + 25;
     Blynk.virtualWrite(V3, activeStart);
   }
 }
 
-BLYNK_WRITE(V6) { compensator = param.asInt(); } // Ghi nhận giá trị tưới bù (+- %)
+BLYNK_WRITE(V10) { 
+  if (param.asInt() == 1) {
+    EEPROM.write(100 + (selectedPlantID * 2), 255); 
+    EEPROM.commit();
+    loadData(selectedPlantID);
+    Blynk.virtualWrite(V3, activeStart);
+  }
+}
 
-BLYNK_WRITE(V7) { // Khi nhấn nút "Reset thống kê"
+BLYNK_WRITE(V6) { compensator = param.asInt(); } 
+
+BLYNK_WRITE(V7) { 
   if (param.asInt() == 1) { 
-    totalLiters = 0; // Đưa tổng lít nước về 0
+    totalLiters = 0; 
     Blynk.virtualWrite(V8, 0); 
   } 
 }
 
 void setup() {
   Serial.begin(115200);
-  EEPROM.begin(512); // Khởi tạo 512 byte bộ nhớ tĩnh
-  dht.begin();       // Khởi động cảm biến nhiệt độ ẩm không khí
+  EEPROM.begin(512);
+  dht.begin(); 
   
   pinMode(pumpPin, OUTPUT);
-  digitalWrite(pumpPin, HIGH); // Mạch Relay kích mức thấp nên HIGH là TẮT bơm
+  digitalWrite(pumpPin, HIGH); 
   
   pinMode(flowSensorPin, INPUT_PULLUP);
-  // Thiết lập ngắt: Khi chân D2 chuyển từ cao xuống thấp (FALLING) thì gọi hàm đếm xung
   attachInterrupt(digitalPinToInterrupt(flowSensorPin), pulseCounter, FALLING);
 
-  // --- QUẢN LÝ WIFI ---
   WiFiManager wm;
-  //wm.resetSettings(); // 1. Bỏ dấu // ở đây
-  //WiFi.disconnect(true); // 2. Thêm dòng này để ngắt kết nối WiFi cũ hoàn toàn
-  //ESP.eraseConfig(); // 3. Thêm dòng này để xóa trắng cấu hình WiFi trong Flash
-  //delay(1000); // Chờ 1 giây để chip xử lý việc xóa
   if (!wm.autoConnect("CDTN_64130859_HTTNTMIoT", "12345678")) {
     delay(5000);
-    ESP.restart(); // Khởi động lại nếu cấu hình thất bại
+    ESP.restart();
   }
 
-  Blynk.config(BLYNK_AUTH_TOKEN); // Kết nối vào Server Blynk
+  Blynk.config(BLYNK_AUTH_TOKEN);
+  rtc.begin(); // Bắt đầu lấy giờ từ Server
 
-  // Đọc lại loại cây cuối cùng sử dụng trước khi mất điện từ ô nhớ 50
   int lastPlant = EEPROM.read(50);
   selectedPlantID = (lastPlant >= 1 && lastPlant <= 13) ? lastPlant : 1;
   loadData(selectedPlantID);
   
-  // Cập nhật các trạng thái ban đầu lên giao diện App
   Blynk.virtualWrite(V3, activeStart);
   Blynk.virtualWrite(V4, selectedPlantID);
-  Blynk.virtualWrite(V6, 0); 
 }
 
 void loop() {
-  Blynk.run(); // Duy trì kết nối với Server Blynk
+  Blynk.run();
 
-  // 1. TÍNH TOÁN LƯU LƯỢNG NƯỚC (Cập nhật mỗi 1 giây)
+  // Kiểm tra thời gian thực để xác định có trong giờ ưu tiên không
+  long nowSecond = (hour() * 3600) + (minute() * 60) + second();
+  if (startSecond < stopSecond) { // Ví dụ: 6:00 đến 18:00
+    isTimePriority = (nowSecond >= startSecond && nowSecond <= stopSecond);
+  } else { // Ví dụ: 22:00 đến 05:00 sáng hôm sau
+    isTimePriority = (nowSecond >= startSecond || nowSecond <= stopSecond);
+  }
+
+  // 1. Tính lưu lượng
   if ((millis() - oldTime) > 1000) {
-    detachInterrupt(digitalPinToInterrupt(flowSensorPin)); // Tạm dừng ngắt để tính toán
-    // Công thức tính tốc độ dòng chảy dựa trên tần số xung cảm biến
+    detachInterrupt(digitalPinToInterrupt(flowSensorPin));
     flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount) / 7.5;
     oldTime = millis();
-    totalLiters += (flowRate / 60.0); // Cộng dồn vào tổng lượng nước đã dùng
-    pulseCount = 0; // Reset số xung để đếm chu kỳ mới
+    totalLiters += (flowRate / 60.0);
+    pulseCount = 0;
     attachInterrupt(digitalPinToInterrupt(flowSensorPin), pulseCounter, FALLING);
   }
 
-  // 2. GỬI DỮ LIỆU LÊN APP ĐỊNH KỲ (Mỗi 5 giây gửi 1 lần để tiết kiệm dữ liệu)
+  // 2. Gửi dữ liệu định kỳ 5s
   if (millis() - lastSendBlynk > 5000) { 
-    // Đọc độ ẩm đất và chuyển đổi sang thang đo % (0-100)
     int percent = constrain(map(analogRead(sensorPin), 1023, 350, 0, 100), 0, 100);
-    float h = dht.readHumidity();    // Đọc độ ẩm không khí
-    float t = dht.readTemperature(); // Đọc nhiệt độ không khí
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
 
     Blynk.virtualWrite(V0, percent);      
     Blynk.virtualWrite(V1, flowRate);     
     Blynk.virtualWrite(V8, totalLiters);  
     
-    if (!isnan(h) && !isnan(t)) { // Kiểm tra nếu cảm biến DHT hoạt động bình thường
+    if (!isnan(h) && !isnan(t)) {
       Blynk.virtualWrite(V11, t);    
       Blynk.virtualWrite(V12, h);    
       
-      // LOGIC CẢNH BÁO: Nếu nhiệt độ > 36 độ C, gửi thông báo về điện thoại
       if (t > 36.0 && !isWarned) {
-          Blynk.logEvent("temp_alert", String("Cảnh báo! Nhiệt độ vườn: ") + t + "°C");
-          isWarned = true; // Đánh dấu đã gửi để không gửi tin nhắn liên tục
+          Blynk.logEvent("temp_alert", String("Nhiệt độ cao: ") + t + "°C");
+          isWarned = true; 
       } else if (t <= 36.0) {
-          isWarned = false; // Reset trạng thái khi nhiệt độ hạ nhiệt
+          isWarned = false; 
       }
     }
     lastSendBlynk = millis();
   }
 
-  // 3. LOGIC ĐIỀU KHIỂN BƠM TỰ ĐỘNG (Dựa trên độ ẩm đất)
+  // 3. LOGIC ĐIỀU KHIỂN BƠM (Thêm điều kiện thời gian)
   int percentNow = constrain(map(analogRead(sensorPin), 1023, 350, 0, 100), 0, 100);
-  int startLimit = activeStart + compensator; // Ngưỡng bật bơm
-  int stopLimit = activeStop + compensator;   // Ngưỡng tắt bơm
+  int startLimit = activeStart + compensator;
+  int stopLimit = activeStop + compensator;
 
-  if (percentNow < startLimit) {
-      digitalWrite(pumpPin, LOW);  // Bật bơm (Kích mức thấp)
+  // Bơm chỉ bật khi Đất khô VÀ Đang trong giờ ưu tiên
+  if (percentNow < startLimit && isTimePriority) {
+      digitalWrite(pumpPin, LOW);  // Bật bơm
   } 
-  else if (percentNow > stopLimit) {
-      digitalWrite(pumpPin, HIGH); // Tắt bơm (Kích mức cao)
+  // Bơm tắt khi Đất đủ ẩm HOẶC Đã hết giờ ưu tiên (để an toàn)
+  else if (percentNow > stopLimit || !isTimePriority) {
+      digitalWrite(pumpPin, HIGH); // Tắt bơm
   }
 }
