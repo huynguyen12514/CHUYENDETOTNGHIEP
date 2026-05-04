@@ -7,118 +7,115 @@
 #include <EEPROM.h>
 #include <WiFiManager.h> 
 #include "DHT.h" 
-#include <TimeLib.h>           // Thư viện quản lý thời gian
-#include <WidgetRTC.h>         // Thư viện lấy thời gian thực từ Internet
 
 // --- CẤU HÌNH PHẦN CỨNG ---
 const int sensorPin = A0;      
 const int pumpPin = D5;        
-const int flowSensorPin = D2;  
+const int flowSensorPin = D7;  
 #define DHTPIN D6              
 #define DHTTYPE DHT11
 
 DHT dht(DHTPIN, DHTTYPE);
-WidgetRTC rtc;                 // Khởi tạo bộ lấy giờ thực
 
-// --- BIẾN TOÀN CỤC ---
+// --- CẤU HÌNH HỆ THỐNG ---
+#define MAX_PLANTS 51 
 volatile long pulseCount = 0;
-float flowRate = 0.0;
-float totalLiters = 0.0;
-unsigned long oldTime = 0;
-unsigned long lastSendBlynk = 0; 
-bool isWarned = false; 
+float flowRate = 0.0, totalLiters = 0.0;
+unsigned long oldTime = 0, lastSendBlynk = 0; 
 
-// Biến quản lý thời gian tưới ưu tiên
-long startSecond, stopSecond; 
-bool isTimePriority = false;   // Cờ kiểm tra có đang trong giờ ưu tiên không
+int activeStart, activeStop, selectedPlantID = 1;
+int inputStart = 0, inputStop = 0; 
+int compensator = 0;    
 
 struct PlantProfile {
-  int startT; 
+  int startT; int stopT;
 };
+PlantProfile library[MAX_PLANTS];
 
-PlantProfile library[14] = {
-  {0},  
-  {45}, // 1. Cam / Quyt
-  {40}, // 2. Xoai
-  {55}, // 3. Dua hau / Dua luoi
-  {50}, // 4. Vu sua
-  {65}, // 5. Rau muong
-  {45}, // 6. Rau cai / Xa lach
-  {50}, // 7. Ca chua / Ot
-  {45}, // 8. Kho qua / Dua leo
-  {30}, // 9. Xuong rong / Sen da
-  {50}, // 10. Hoa hong
-  {60}, // 11. Hoa lan
-  {35}, // 12. Hoa giay / Luoi ho
-  {40}  // 13. Cay trong tuy chinh (Mac dinh 40%)
-};
-int activeStart, activeStop, selectedPlantID = 1;
-int inputThreshold = 0; 
-int compensator = 0;    
+void setupLibrary() {
+  // Cú pháp: {Ngưỡng Bật (Khô), Ngưỡng Tắt (Đủ ẩm)}
+  library[1]  = {45, 75}; // Cam / Quýt
+  library[2]  = {40, 70}; // Xoài
+  library[3]  = {55, 85}; // Dưa hấu
+  library[4]  = {50, 80}; // Vú sữa
+  library[5]  = {65, 90}; // Rau muống
+  library[6]  = {60, 85}; // Rau cải
+  library[7]  = {52, 78}; // Cà chua
+  library[8]  = {48, 72}; // Khổ qua
+  library[9]  = {25, 55}; // Xương rồng (Hiệu chỉnh lại thấp hơn)
+  library[10] = {58, 82}; // Hoa hồng
+  library[11] = {45, 75}; // Ổi
+  library[12] = {50, 80}; // Mận
+  library[13] = {55, 85}; // Ớt
+  library[14] = {60, 88}; // Hành lá
+  library[15] = {42, 72}; // Đu đủ
+  library[16] = {50, 80}; // Na (Mãng cầu)
+  library[17] = {55, 85}; // Dưa leo
+  library[18] = {48, 78}; // Đậu đũa
+  library[19] = {35, 65}; // Nha đam
+  library[20] = {60, 85}; // Hoa lan
+  library[21] = {40, 70}; // Thanh long
+  library[22] = {45, 75}; // Sầu riêng
+  library[23] = {50, 80}; // Mít
+  library[24] = {60, 88}; // Rau gia vị
+  library[25] = {45, 75}; // Chanh
+  library[26] = {50, 80}; // Nhãn
+  library[27] = {52, 82}; // Vải
+  library[28] = {48, 78}; // Mướp
+  library[29] = {30, 60}; // Sen đá
+  library[30] = {50, 80}; // Hoa mai
+
+  // 20 cây tùy chỉnh (31-50): Để mặc định trung bình cho người dùng tự sửa
+  for (int i = 31; i < MAX_PLANTS; i++) {
+    library[i] = {45, 75}; 
+  }
+}
 
 void IRAM_ATTR pulseCounter() { pulseCount++; }
 
 void loadData(int id) {
-  if (id < 1 || id > 13) id = 1;
+  if (id < 1 || id >= MAX_PLANTS) id = 1;
   selectedPlantID = id;
-  EEPROM.write(50, id); 
+  
   int s = EEPROM.read(100 + (id * 2)); 
-  activeStart = (s > 0 && s <= 100) ? s : library[id].startT;
-  activeStop = activeStart + 25; 
+  int st = EEPROM.read(101 + (id * 2));
+
+  if (id <= 30) {
+    activeStart = (s <= 5 || s > 95) ? library[id].startT : s;
+    activeStop = (st <= 5 || st > 95) ? library[id].stopT : st;
+  } else {
+    activeStart = (s > 0) ? s : 40;
+    activeStop = (st > 0) ? st : 70;
+  }
+
+  Blynk.virtualWrite(V9, activeStart);  
+  Blynk.virtualWrite(V13, activeStop); 
+  Blynk.virtualWrite(V3, activeStart);
+  Blynk.virtualWrite(V4, id); 
+  EEPROM.write(50, id);
   EEPROM.commit();
 }
 
-// --- XỬ LÝ BLYNK ---
-
-// MỚI: Nhận khung giờ ưu tiên từ Widget Time Input trên V2
-BLYNK_WRITE(V2) {
-  TimeInputParam t(param);
-  if (t.hasStartTime()) {
-    startSecond = (t.getStartHour() * 3600) + (t.getStartMinute() * 60);
-    stopSecond = (t.getStopHour() * 3600) + (t.getStopMinute() * 60);
-    Serial.println("Đã cập nhật khung giờ ưu tiên!");
-  }
-}
-
-BLYNK_WRITE(V4) { 
-  loadData(param.asInt()); 
-  Blynk.virtualWrite(V3, activeStart); 
-}
-
-BLYNK_WRITE(V9) { inputThreshold = param.asInt(); } 
-
-BLYNK_WRITE(V5) { 
-  if (param.asInt() == 1 && inputThreshold > 0) {
-    EEPROM.write(100 + (selectedPlantID * 2), inputThreshold);
+BLYNK_WRITE(V4) { loadData(param.asInt()); }
+BLYNK_WRITE(V6) { compensator = param.asInt(); }
+BLYNK_WRITE(V7) { if (param.asInt() == 1) { totalLiters = 0; Blynk.virtualWrite(V8, 0); } }
+BLYNK_WRITE(V9) { inputStart = param.asInt(); }
+BLYNK_WRITE(V13) { inputStop = param.asInt(); }
+BLYNK_WRITE(V5) {
+  if (param.asInt() == 1 && inputStart > 0) {
+    activeStart = inputStart; activeStop = inputStop;
+    EEPROM.write(100 + (selectedPlantID * 2), activeStart);
+    EEPROM.write(101 + (selectedPlantID * 2), activeStop);
     EEPROM.commit();
-    activeStart = inputThreshold; 
-    activeStop = activeStart + 25;
     Blynk.virtualWrite(V3, activeStart);
   }
-}
-
-BLYNK_WRITE(V10) { 
-  if (param.asInt() == 1) {
-    EEPROM.write(100 + (selectedPlantID * 2), 255); 
-    EEPROM.commit();
-    loadData(selectedPlantID);
-    Blynk.virtualWrite(V3, activeStart);
-  }
-}
-
-BLYNK_WRITE(V6) { compensator = param.asInt(); } 
-
-BLYNK_WRITE(V7) { 
-  if (param.asInt() == 1) { 
-    totalLiters = 0; 
-    Blynk.virtualWrite(V8, 0); 
-  } 
 }
 
 void setup() {
   Serial.begin(115200);
-  EEPROM.begin(512);
-  dht.begin(); 
+  EEPROM.begin(512); 
+  dht.begin();
+  setupLibrary(); 
   
   pinMode(pumpPin, OUTPUT);
   digitalWrite(pumpPin, HIGH); 
@@ -127,45 +124,40 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(flowSensorPin), pulseCounter, FALLING);
 
   WiFiManager wm;
-  if (!wm.autoConnect("CDTN_64130859_HTTNTMIoT", "12345678")) {
-    delay(5000);
-    ESP.restart();
-  }
-
+//Dòng dưới đây sẽ XOÁ sạch WiFi cũ mỗi khi bạn rút điện cắm lại/reset mạch
+  // Chỉ nên dùng khi bạn muốn đổi mạng WiFi liên tục. 
+  // Nếu muốn mạch tự nhớ WiFi, hãy thêm dấu // ở đầu dòng này sau khi test xong.
+  wm.resetSettings();
+  wm.autoConnect("64130859_CDTN_IoT", "12345678");
+  
   Blynk.config(BLYNK_AUTH_TOKEN);
-  rtc.begin(); // Bắt đầu lấy giờ từ Server
 
   int lastPlant = EEPROM.read(50);
-  selectedPlantID = (lastPlant >= 1 && lastPlant <= 13) ? lastPlant : 1;
-  loadData(selectedPlantID);
-  
-  Blynk.virtualWrite(V3, activeStart);
-  Blynk.virtualWrite(V4, selectedPlantID);
+  loadData((lastPlant >= 1 && lastPlant < MAX_PLANTS) ? lastPlant : 1);
 }
 
 void loop() {
   Blynk.run();
 
-  // Kiểm tra thời gian thực để xác định có trong giờ ưu tiên không
-  long nowSecond = (hour() * 3600) + (minute() * 60) + second();
-  if (startSecond < stopSecond) { // Ví dụ: 6:00 đến 18:00
-    isTimePriority = (nowSecond >= startSecond && nowSecond <= stopSecond);
-  } else { // Ví dụ: 22:00 đến 05:00 sáng hôm sau
-    isTimePriority = (nowSecond >= startSecond || nowSecond <= stopSecond);
-  }
-
-  // 1. Tính lưu lượng
-  if ((millis() - oldTime) > 1000) {
+  unsigned long currentTime = millis();
+ if ((currentTime - oldTime) > 1000) { // Đo mỗi 1 giây
     detachInterrupt(digitalPinToInterrupt(flowSensorPin));
-    flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount) / 7.5;
-    oldTime = millis();
-    totalLiters += (flowRate / 60.0);
+    
+    // 1. Tính lưu lượng tức thời (L/phút)
+    // f = 7.5 * Q => Q = f / 7.5
+    flowRate = (pulseCount / 7.5); 
+
+    // 2. Tính tổng lượng nước đã dùng (Lít)
+    // 1 giây này chảy được: (pulseCount / 7.5) / 60 giây
+    // Hoặc đơn giản: pulseCount / 450
+    totalLiters += (pulseCount / 450.0); 
+
     pulseCount = 0;
+    oldTime = currentTime;
     attachInterrupt(digitalPinToInterrupt(flowSensorPin), pulseCounter, FALLING);
   }
 
-  // 2. Gửi dữ liệu định kỳ 5s
-  if (millis() - lastSendBlynk > 5000) { 
+  if (millis() - lastSendBlynk > 3000) {
     int percent = constrain(map(analogRead(sensorPin), 1023, 350, 0, 100), 0, 100);
     float h = dht.readHumidity();
     float t = dht.readTemperature();
@@ -173,32 +165,22 @@ void loop() {
     Blynk.virtualWrite(V0, percent);      
     Blynk.virtualWrite(V1, flowRate);     
     Blynk.virtualWrite(V8, totalLiters);  
-    
     if (!isnan(h) && !isnan(t)) {
-      Blynk.virtualWrite(V11, t);    
-      Blynk.virtualWrite(V12, h);    
-      
-      if (t > 36.0 && !isWarned) {
-          Blynk.logEvent("temp_alert", String("Nhiệt độ cao: ") + t + "°C");
-          isWarned = true; 
-      } else if (t <= 36.0) {
-          isWarned = false; 
-      }
+      Blynk.virtualWrite(V11, t);
+      Blynk.virtualWrite(V12, h);
     }
+
+    // --- LOGIC BƠM ĐÃ LƯỢC BỎ THỜI GIAN ---
+    int startLimit = activeStart + compensator;
+    int stopLimit = activeStop + compensator;
+
+    if (percent < startLimit) {
+        digitalWrite(pumpPin, LOW);  // Bật bơm khi khô
+    } 
+    else if (percent > stopLimit) {
+        digitalWrite(pumpPin, HIGH); // Tắt bơm khi đủ ẩm
+    }
+    
     lastSendBlynk = millis();
-  }
-
-  // 3. LOGIC ĐIỀU KHIỂN BƠM (Thêm điều kiện thời gian)
-  int percentNow = constrain(map(analogRead(sensorPin), 1023, 350, 0, 100), 0, 100);
-  int startLimit = activeStart + compensator;
-  int stopLimit = activeStop + compensator;
-
-  // Bơm chỉ bật khi Đất khô VÀ Đang trong giờ ưu tiên
-  if (percentNow < startLimit && isTimePriority) {
-      digitalWrite(pumpPin, LOW);  // Bật bơm
-  } 
-  // Bơm tắt khi Đất đủ ẩm HOẶC Đã hết giờ ưu tiên (để an toàn)
-  else if (percentNow > stopLimit || !isTimePriority) {
-      digitalWrite(pumpPin, HIGH); // Tắt bơm
   }
 }
