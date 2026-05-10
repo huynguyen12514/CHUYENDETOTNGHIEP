@@ -1,0 +1,24 @@
+CODE GOOGLE
+function doGet(e) { 
+  Logger.log(JSON.stringify(e));
+  if (typeof e !== 'undefined') {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var newRow = sheet.getLastRow() + 1;
+    
+    var rowData = [];
+    
+    // ĐỊNH DẠNG LẠI THỜI GIAN CÓ CẢ GIỜ PHÚT GIÂY THEO MÚI GIỜ VIỆT NAM (GMT+7)
+    rowData[0] = Utilities.formatDate(new Date(), "GMT+7", "HH:mm:ss dd/MM/yyyy"); 
+    
+    rowData[1] = e.parameter.soil;
+    rowData[2] = e.parameter.temp;
+    rowData[3] = e.parameter.hum;
+    rowData[4] = e.parameter.flow;
+    rowData[5] = e.parameter.total;
+    rowData[6] = e.parameter.pump;
+    
+    sheet.getRange(newRow, 1, 1, rowData.length).setValues([rowData]);
+    return ContentService.createTextOutput("Ghi du lieu thanh cong!");
+  }
+  return ContentService.createTextOutput("Khong co du lieu.");
+}
