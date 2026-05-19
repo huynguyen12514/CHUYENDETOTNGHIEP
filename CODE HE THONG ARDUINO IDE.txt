@@ -17,16 +17,20 @@
 #include <WiFiClientSecure.h>
 
 // --- CẤU HÌNH GOOGLE SHEETS ---
-// Hãy dán mã ID Google Script của bạn vào đây
-const String googleScriptID = "AKfycbw6UmTiqeGPWFdiTLxFeWS1j9519SCwSO7-iwcmLllYvDegKQ6u9lNiU92zo8kOZ_Xw"; 
+// Đã cập nhật mã ID Google Script mới của bạn
+const String googleScriptID = "AKfycbyRV-bG8uYPDjT4aZhBxV1LskoTAumOg_fL8gPLgECN9B8qV2jXFrREpGLmYYRVLoGY"; 
 unsigned long lastSendGoogleSheet = 0;
-const unsigned long sendSheetInterval = 15000; // Gửi dữ liệu lên Google Sheet mỗi 15 giây (Tránh gửi quá dày)
+const unsigned long sendSheetInterval = 15000; // Gửi dữ liệu lên Google Sheet mỗi 15 giây
+
+// Khai báo đối tượng kết nối toàn cục để tối ưu RAM, tránh phân mảnh bộ nhớ gây ngắt kết nối
+BearSSL::WiFiClientSecure secureClient;
+HTTPClient http;
 
 // --- CẤU HÌNH PHẦN CỨNG ---
 const int sensorPin = A0;
 const int pumpPin = D5;        // Rơ-le điều khiển bơm
-const int flowSensorPin = D7;
-#define DHTPIN D6              // Cảm biến DHT11
+const int flowSensorPin = D6; //cảm biến đo lưu lượng nước
+#define DHTPIN D7             // Cảm biến DHT11
 #define DHTTYPE DHT11
 
 DHT dht(DHTPIN, DHTTYPE);
@@ -54,6 +58,7 @@ struct PlantProfile {
   int startT; int stopT;
 };
 PlantProfile library[MAX_PLANTS];
+
 // --- HÀM ĐỌC/GHI SỐ THỰC (FLOAT) VÀO EEPROM ---
 void EEPROM_writeFloat(int address, float value) {
   byte* p = (byte*)(void*)&value;
@@ -104,7 +109,6 @@ void setupLibrary() {
   library[29] = {30, 60};//SEN ĐÁ
   library[30] = {50, 80};// Hoa mai/HOA GIẤY
   
-
   for (int i = 31; i < MAX_PLANTS; i++) {
     library[i] = {45, 75};
   }
@@ -207,15 +211,14 @@ BLYNK_CONNECTED() {
   Blynk.syncVirtual(V2); 
 }
 
-// --- HÀM GỬI DỮ LIỆU LÊN GOOGLE SHEET ---
+// --- HÀM GỬI DỮ LIỆU LÊN GOOGLE SHEET (ĐÃ TỐI ƯU KHÔNG LO TRÀN RAM) ---
 void sendDataToGoogleSheet(int soil, float temp, float hum, float flow, float total, String pumpState) {
   if (WiFi.status() == WL_CONNECTED) {
-    std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-    // Bỏ qua xác thực chứng chỉ SSL để giảm tải bộ nhớ cho chip ESP8266
-    client->setInsecure(); 
     
-    HTTPClient http;
-    // Xây dựng URL yêu cầu gửi dữ liệu lên Google Script qua phương thức GET
+    // Thiết lập bỏ qua kiểm tra chứng chỉ SSL một lần
+    secureClient.setInsecure(); 
+    
+    // Xây dựng URL yêu cầu gửi dữ liệu
     String url = "https://script.google.com/macros/s/" + googleScriptID + "/exec?";
     url += "soil=" + String(soil);
     url += "&temp=" + String(temp);
@@ -227,8 +230,8 @@ void sendDataToGoogleSheet(int soil, float temp, float hum, float flow, float to
     Serial.print("Dang gui du lieu len Google Sheet: ");
     Serial.println(url);
     
-    if (http.begin(*client, url)) {
-      // Vì Google Script sử dụng chuyển hướng (302 Redirect), cần cho phép tự động chuyển hướng
+    if (http.begin(secureClient, url)) {
+      // Cho phép tự động chuyển hướng theo mã 302 Redirect của Google Script
       http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
       int httpCode = http.GET();
       if (httpCode > 0) {
@@ -239,7 +242,7 @@ void sendDataToGoogleSheet(int soil, float temp, float hum, float flow, float to
         Serial.print("Loi ket noi HTTP: ");
         Serial.println(http.errorToString(httpCode).c_str());
       }
-      http.end();
+      http.end(); // Kết thúc phiên để giải phóng bộ đệm mạng
     }
   } else {
     Serial.println("Mat ket noi Wifi, khong the gui Google Sheet!");
@@ -267,7 +270,7 @@ void setup() {
   }
 
   WiFiManager wm;
- // wm.resetSettings(); //reset kết nối wifi
+  // wm.resetSettings(); // Bỏ comment nếu muốn reset mạng wifi cũ để cấu hình lại
   wm.autoConnect("64130859_CDTN_IoT", "12345678");
   
   Blynk.config(BLYNK_AUTH_TOKEN);
@@ -359,8 +362,10 @@ void loop() {
     float t = dht.readTemperature();
     String pState = (digitalRead(pumpPin) == LOW) ? "ON" : "OFF";
     
-    // Chỉ gửi khi các thông số cảm biến đọc được hợp lệ
-    if (!isnan(h) && !isnan(t)) {
+    // Nếu cảm biến DHT11 bị lỗi đọc (NaN), dòng dưới đây vẫn tạm thời cho phép in log báo lỗi
+    if (isnan(h) || isnan(t)) {
+      Serial.println("Loi: Cam bien DHT11 doc gia tri NaN! Tam thoi dung gui Google Sheet de tranh loi.");
+    } else {
       sendDataToGoogleSheet(percent, t, h, flowRate, totalLiters, pState);
     }
     lastSendGoogleSheet = millis();
