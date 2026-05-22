@@ -17,20 +17,19 @@
 #include <WiFiClientSecure.h>
 
 // --- CẤU HÌNH GOOGLE SHEETS ---
-// Đã cập nhật mã ID Google Script mới của bạn
-const String googleScriptID = "AKfycbyRV-bG8uYPDjT4aZhBxV1LskoTAumOg_fL8gPLgECN9B8qV2jXFrREpGLmYYRVLoGY"; 
+const String googleScriptID = "AKfycbyRV-bG8uYPDjT4aZhBxV1LskoTAumOg_fL8gPLgECN9B8qV2jXFrREpGLmYYRVLoGY";
 unsigned long lastSendGoogleSheet = 0;
-const unsigned long sendSheetInterval = 15000; // Gửi dữ liệu lên Google Sheet mỗi 15 giây
+const unsigned long sendSheetInterval = 15000;
 
-// Khai báo đối tượng kết nối toàn cục để tối ưu RAM, tránh phân mảnh bộ nhớ gây ngắt kết nối
+// Khai báo đối tượng kết nối toàn cục để tối ưu RAM
 BearSSL::WiFiClientSecure secureClient;
 HTTPClient http;
 
 // --- CẤU HÌNH PHẦN CỨNG ---
 const int sensorPin = A0;
-const int pumpPin = D5;        // Rơ-le điều khiển bơm
-const int flowSensorPin = D6; //cảm biến đo lưu lượng nước
-#define DHTPIN D7             // Cảm biến DHT11
+const int pumpPin = D5;
+const int flowSensorPin = D6; 
+#define DHTPIN D7             
 #define DHTTYPE DHT11
 
 DHT dht(DHTPIN, DHTTYPE);
@@ -46,7 +45,6 @@ bool lastPumpState = HIGH;
 unsigned long lastEEPROMWrite = 0;
 // --- BIẾN TRẠNG THÁI HỆ THỐNG ---
 bool systemEnabled = true;
-
 // --- HIỆU CHUẨN ĐỘ CHÍNH XÁC CHO CẢM BIẾN LƯU LƯỢNG NƯỚC ---
 const float calibrationFactor = 45.0;
 // --- CẤU HÌNH BỘ LỌC TRUNG BÌNH ĐỘNG ---
@@ -78,36 +76,36 @@ float EEPROM_readFloat(int address) {
 
 // --- THƯ VIỆN CÂY TRỒNG MẶC ĐỊNH ---
 void setupLibrary() {
-  library[1]  = {45, 75};//CAM, QUÝT
+  library[1]  = {45, 75}; //CAM, QUÝT
   library[2]  = {40, 70}; // Xoài
-  library[3]  = {55, 85};//DƯA HẤU
-  library[4]  = {50, 80};//VÚ SỮA
-  library[5]  = {65, 90};//RAU MUỐNG
-  library[6]  = {60, 85};//RAU CẢI
-  library[7]  = {52, 78};//CÀ CHUA
-  library[8]  = {48, 72};//MƯỚP ĐẮNG
-  library[9]  = {25, 55};//XƯƠNG RỒNG
-  library[10] = {58, 82};//HOA HỒNG
-  library[11] = {45, 75};//ỔI
+  library[3]  = {55, 85}; //DƯA HẤU
+  library[4]  = {50, 80}; //VÚ SỮA
+  library[5]  = {65, 90}; //RAU MUỐNG
+  library[6]  = {60, 85}; //RAU CẢI
+  library[7]  = {52, 78}; //CÀ CHUA
+  library[8]  = {48, 72}; //MƯỚP ĐẮNG
+  library[9]  = {25, 55}; //XƯƠNG RỒNG
+  library[10] = {58, 82}; //HOA HỒNG
+  library[11] = {45, 75}; //ỔI
   library[12] = {50, 80}; // Mận
-  library[13] = {55, 85};//ỚT
+  library[13] = {55, 85}; //ỚT
   library[14] = {60, 88}; // Hành lá
-  library[15] = {42, 72};//ĐU ĐỦ
+  library[15] = {42, 72}; //ĐU ĐỦ
   library[16] = {50, 80}; // Na (Mãng cầu)
-  library[17] = {55, 85};//DƯA LEO
+  library[17] = {55, 85}; //DƯA LEO
   library[18] = {48, 78}; // Đậu đũa
-  library[19] = {35, 65};//ĐẬU ĐŨA
+  library[19] = {35, 65}; //ĐẬU ĐŨA
   library[20] = {60, 85}; // Hoa lan
-  library[21] = {40, 70};//NHA ĐAM
+  library[21] = {40, 70}; //NHA ĐAM
   library[22] = {45, 75}; // Sầu riêng
-  library[23] = {50, 80};//MÍT
-  library[24] = {60, 88};  // Rau gia vị
-  library[25] = {45, 75};//CHANH
+  library[23] = {50, 80}; //MÍT
+  library[24] = {60, 88}; // Rau gia vị
+  library[25] = {45, 75}; //CHANH
   library[26] = {50, 80}; // Nhãn
-  library[27] = {52, 82};//VẢI
-  library[28] = {48, 78}; // Mướp
-  library[29] = {30, 60};//SEN ĐÁ
-  library[30] = {50, 80};// Hoa mai/HOA GIẤY
+  library[27] = {52, 82}; //VẢI
+  library[28] = {48, 78}; // Mưới
+  library[29] = {30, 60}; //SEN ĐÁ
+  library[30] = {50, 80}; // Hoa mai/HOA GIẤY
   
   for (int i = 31; i < MAX_PLANTS; i++) {
     library[i] = {45, 75};
@@ -152,11 +150,24 @@ void loadData(int id) {
   Blynk.virtualWrite(V4, id);
   EEPROM.write(50, id);
   EEPROM.commit();
+
+  // --- LOG CHO BƯỚC 1 & BƯỚC 2: ĐÃ ĐƯA % LÊN SÁT CẠNH CON SỐ ---
+  Serial.print("Da lua chon cay trong so: ");
+  Serial.println(selectedPlantID);
+  Serial.print("Nguong bat bom = ");
+  Serial.print(activeStart); 
+  Serial.println("%");       
+  Serial.print("Nguong tat bom = ");
+  Serial.print(activeStop);  
+  Serial.println("%");       
+  Serial.println("EEPROM ghi nho thanh cong");
 }
 
 // --- XỬ LÝ GIAO TIẾP BLYNK ---
-BLYNK_WRITE(V4) { loadData(param.asInt()); } // Chọn loại cây
-BLYNK_WRITE(V6) { compensator = param.asInt(); } // Tinh chỉnh sai số cảm biến
+BLYNK_WRITE(V4) { 
+  loadData(param.asInt());
+} 
+BLYNK_WRITE(V6) { compensator = param.asInt(); } 
 BLYNK_WRITE(V7) {
   if (param.asInt() == 1) {
     totalLiters = 0;
@@ -164,10 +175,10 @@ BLYNK_WRITE(V7) {
     EEPROM.commit();
     Blynk.virtualWrite(V8, 0);
   }
-} // Reset nước
+} 
 
-BLYNK_WRITE(V9) { inputStart = param.asInt(); } // Nhập ngưỡng bật tạm thời
-BLYNK_WRITE(V13) { inputStop = param.asInt(); } // Nhập ngưỡng tắt tạm thời
+BLYNK_WRITE(V9) { inputStart = param.asInt(); } 
+BLYNK_WRITE(V13) { inputStop = param.asInt(); } 
 
 // Nút lưu cài đặt tùy chỉnh
 BLYNK_WRITE(V5) {
@@ -178,6 +189,13 @@ BLYNK_WRITE(V5) {
     EEPROM.write(101 + (selectedPlantID * 2), activeStop);
     EEPROM.commit();
     Blynk.virtualWrite(V3, activeStart);
+
+    // --- LOG CHO BƯỚC 3: CHẾ ĐỘ TÙY CHỈNH NÂNG CAO ---
+    if (selectedPlantID >= 31) {
+      Serial.println("Nguong tuy chinh da duoc chon");
+      Serial.println("Dang luu");
+      Serial.println("EEPROM ghi nho thanh cong");
+    }
   }
 }
 
@@ -211,14 +229,10 @@ BLYNK_CONNECTED() {
   Blynk.syncVirtual(V2); 
 }
 
-// --- HÀM GỬI DỮ LIỆU LÊN GOOGLE SHEET (ĐÃ TỐI ƯU KHÔNG LO TRÀN RAM) ---
+// --- HÀM GỬI DỮ LIỆU LÊN GOOGLE SHEET ---
 void sendDataToGoogleSheet(int soil, float temp, float hum, float flow, float total, String pumpState) {
   if (WiFi.status() == WL_CONNECTED) {
-    
-    // Thiết lập bỏ qua kiểm tra chứng chỉ SSL một lần
-    secureClient.setInsecure(); 
-    
-    // Xây dựng URL yêu cầu gửi dữ liệu
+    secureClient.setInsecure();
     String url = "https://script.google.com/macros/s/" + googleScriptID + "/exec?";
     url += "soil=" + String(soil);
     url += "&temp=" + String(temp);
@@ -229,9 +243,7 @@ void sendDataToGoogleSheet(int soil, float temp, float hum, float flow, float to
     
     Serial.print("Dang gui du lieu len Google Sheet: ");
     Serial.println(url);
-    
     if (http.begin(secureClient, url)) {
-      // Cho phép tự động chuyển hướng theo mã 302 Redirect của Google Script
       http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
       int httpCode = http.GET();
       if (httpCode > 0) {
@@ -242,7 +254,7 @@ void sendDataToGoogleSheet(int soil, float temp, float hum, float flow, float to
         Serial.print("Loi ket noi HTTP: ");
         Serial.println(http.errorToString(httpCode).c_str());
       }
-      http.end(); // Kết thúc phiên để giải phóng bộ đệm mạng
+      http.end(); 
     }
   } else {
     Serial.println("Mat ket noi Wifi, khong the gui Google Sheet!");
@@ -251,12 +263,15 @@ void sendDataToGoogleSheet(int soil, float temp, float hum, float flow, float to
 
 void setup() {
   Serial.begin(115200);
+  
+  Serial.println("Reading EEPROM...");
+  
   EEPROM.begin(512); 
   dht.begin();
   setupLibrary(); 
   
   pinMode(pumpPin, OUTPUT);
-  digitalWrite(pumpPin, HIGH); // Tắt bơm lúc mới khởi động (Rơ-le kích mức thấp)
+  digitalWrite(pumpPin, HIGH);
   
   pinMode(flowSensorPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(flowSensorPin), pulseCounter, FALLING);
@@ -270,12 +285,17 @@ void setup() {
   }
 
   WiFiManager wm;
-  // wm.resetSettings(); // Bỏ comment nếu muốn reset mạng wifi cũ để cấu hình lại
   wm.autoConnect("64130859_CDTN_IoT", "12345678");
-  
   Blynk.config(BLYNK_AUTH_TOKEN);
   int lastPlant = EEPROM.read(50);
+  
+  Serial.print("Last Plant ID = ");
+  Serial.println((lastPlant >= 1 && lastPlant < MAX_PLANTS) ? lastPlant : 1);
+  Serial.println("Restoring configuration... ");
+  
   loadData((lastPlant >= 1 && lastPlant < MAX_PLANTS) ? lastPlant : 1);
+  
+  Serial.println("Hien thi thanh cong");
   Blynk.virtualWrite(V2, 1);
 }
 
@@ -284,7 +304,7 @@ void loop() {
   unsigned long currentTime = millis();
   
   bool isPumpRunning = (digitalRead(pumpPin) == LOW);
-  // --- CHU KỲ 0.5 GIÂY (500ms): TÍNH LƯU LƯỢNG NƯỚC & CHỐNG NHIỄU SỐ ---
+  
   if ((currentTime - oldTime) > 500) {
     noInterrupts();
     long tempPulseCount = pulseCount;
@@ -308,7 +328,6 @@ void loop() {
     oldTime = currentTime;
   }
 
-  // --- CƠ CHẾ LƯU EEPROM THÔNG MINH BẢO VỆ TUỔI THỌ CHIP ---
   if (isPumpRunning == false && lastPumpState == LOW) {
     EEPROM_writeFloat(150, totalLiters);
     EEPROM.commit();
@@ -336,12 +355,20 @@ void loop() {
       Blynk.virtualWrite(V12, h);
     }
 
-    // --- LOGIC ĐIỀU KHIỂN BƠM ---
+    // --- LOGIC ĐIỀU KHIỂN BƠM & LOG BƯỚC 2 + BƯỚC 3 ĐỒNG BỘ ---
     if (systemEnabled) {
       int startLimit = activeStart + compensator;
       int stopLimit = activeStop + compensator;
 
       if (percent < startLimit) {
+          // Báo cáo kiểm thử Bước 2: Khi độ ẩm xuống dưới ngưỡng Hstart thì kích hoạt bơm
+          if (digitalRead(pumpPin) == HIGH) { 
+            Serial.print("Do am dat = ");
+            Serial.print(percent);
+            Serial.println("%");
+            Serial.println("Bom dang mo");
+            Serial.println("Ly do: do am dat qua kho");
+          }
           digitalWrite(pumpPin, LOW); // Bật bơm
       } 
       else if (percent > stopLimit) {
@@ -349,7 +376,7 @@ void loop() {
       }
     }  
     else {
-      digitalWrite(pumpPin, HIGH); // Đảm bảo bơm luôn tắt
+      digitalWrite(pumpPin, HIGH);
     }
     
     lastSendBlynk = millis();
@@ -361,8 +388,6 @@ void loop() {
     float h = dht.readHumidity();
     float t = dht.readTemperature();
     String pState = (digitalRead(pumpPin) == LOW) ? "ON" : "OFF";
-    
-    // Nếu cảm biến DHT11 bị lỗi đọc (NaN), dòng dưới đây vẫn tạm thời cho phép in log báo lỗi
     if (isnan(h) || isnan(t)) {
       Serial.println("Loi: Cam bien DHT11 doc gia tri NaN! Tam thoi dung gui Google Sheet de tranh loi.");
     } else {
