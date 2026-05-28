@@ -78,36 +78,36 @@ float EEPROM_readFloat(int address) {
 
 // --- THƯ VIỆN CÂY TRỒNG MẶC ĐỊNH ---
 void setupLibrary() {
-  library[1]  = {45, 75}; //CAM, QUÝT
-  library[2]  = {40, 70}; // Xoài
+  library[1]  = {45, 75}; //CAM, QUÝT, CHANH
+  library[2]  = {40, 70}; //XOÀI
   library[3]  = {55, 85}; //DƯA HẤU
   library[4]  = {50, 80}; //VÚ SỮA
   library[5]  = {65, 90}; //RAU MUỐNG
   library[6]  = {60, 85}; //RAU CẢI
   library[7]  = {52, 78}; //CÀ CHUA
-  library[8]  = {48, 72}; //MƯỚP ĐẮNG
-  library[9]  = {25, 55}; //XƯƠNG RỒNG
+  library[8]  = {48, 72}; //KHỔ QUA, MƯỚP
+  library[9]  = {25, 55}; //XƯƠNG RỒNG, SEN ĐÁ
   library[10] = {58, 82}; //HOA HỒNG
-  library[11] = {45, 75}; //ỔI
-  library[12] = {50, 80}; // Mận
+  library[11] = {45, 75}; //ỔI, NHÃN
+  library[12] = {50, 80}; //MẬN
   library[13] = {55, 85}; //ỚT
-  library[14] = {60, 88}; // Hành lá
+  library[14] = {60, 88}; //HÀNH LÁ
   library[15] = {42, 72}; //ĐU ĐỦ
-  library[16] = {50, 80}; // Na (Mãng cầu)
+  library[16] = {50, 80}; //NA (MÃNG CẦU)
   library[17] = {55, 85}; //DƯA LEO
-  library[18] = {48, 78}; // Đậu đũa
-  library[19] = {35, 65}; //ĐẬU ĐŨA
-  library[20] = {60, 85}; // Hoa lan
+  library[18] = {48, 78}; //ĐẬU ĐŨA
+  library[19] = {35, 65}; //NHA ĐAM
+  library[20] = {60, 85}; //HOA LAN
   library[21] = {40, 70}; //NHA ĐAM
-  library[22] = {45, 75}; // Sầu riêng
+  library[22] = {45, 75}; //SẦU RIÊNG
   library[23] = {50, 80}; //MÍT
-  library[24] = {60, 88}; // Rau gia vị
+  library[24] = {60, 88}; //RAU GIA VỊ (RAU THƠM, RAU RĂM...)
   library[25] = {45, 75}; //CHANH
-  library[26] = {50, 80}; // Nhãn
+  library[26] = {50, 80}; //NHÃN
   library[27] = {52, 82}; //VẢI
-  library[28] = {48, 78}; // Mưới
+  library[28] = {48, 78}; //MƯỚP
   library[29] = {30, 60}; //SEN ĐÁ
-  library[30] = {50, 80}; // Hoa mai/HOA GIẤY
+  library[30] = {50, 80}; //HOA MAI, HOA GIẤY
   
   for (int i = 31; i < MAX_PLANTS; i++) {
     library[i] = {45, 75};
