@@ -85,7 +85,7 @@ void setupLibrary() {
   library[5]  = {65, 90}; //RAU MUỐNG
   library[6]  = {60, 85}; //RAU CẢI
   library[7]  = {52, 78}; //CÀ CHUA
-  library[8]  = {48, 72}; //KHỔ QUA, MƯỚP
+  library[8]  = {48, 72}; //KHỔ QUA
   library[9]  = {25, 55}; //XƯƠNG RỒNG, SEN ĐÁ
   library[10] = {58, 82}; //HOA HỒNG
   library[11] = {45, 75}; //ỔI, NHÃN
