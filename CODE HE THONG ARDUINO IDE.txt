@@ -101,7 +101,7 @@ void setupLibrary() {
   library[21] = {40, 70}; //NHA ĐAM
   library[22] = {45, 75}; //SẦU RIÊNG
   library[23] = {50, 80}; //MÍT
-  library[24] = {60, 88}; //RAU GIA VỊ (RAU THƠM, RAU RĂM...)
+  library[24] = {60, 88}; //RAU GIA VỊ 
   library[25] = {45, 75}; //CHANH
   library[26] = {50, 80}; //NHÃN
   library[27] = {52, 82}; //VẢI
