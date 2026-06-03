@@ -1,13 +1,13 @@
 //BLYNK 1 --- mail ca nhan - huynguyen12514@gmail.com
-#define BLYNK_TEMPLATE_ID "TMPL6HbYw7dWR"
-#define BLYNK_TEMPLATE_NAME "CDTNHethongtuoinuocthongminhIoT"
-#define BLYNK_AUTH_TOKEN "WAqDl20qBrr-YBDqiL09njva3s_T9pHG"
+//#define BLYNK_TEMPLATE_ID "TMPL6HbYw7dWR"
+//define BLYNK_TEMPLATE_NAME "CDTNHethongtuoinuocthongminhIoT"
+//define BLYNK_AUTH_TOKEN "WAqDl20qBrr-YBDqiL09njva3s_T9pHG"
 
 //ma khai bao blynk thu nghiem
 //BLYNK 2 --- mail thu nghiem - blynkiotdemo@gmail.com
-//#define BLYNK_TEMPLATE_ID "TMPL62tTSqiQF"
-//#define BLYNK_TEMPLATE_NAME "CDTN64130859"
-//#define BLYNK_AUTH_TOKEN "wVv6n_FgoIGcb04UXyMwkf4100f8buFR"
+#define BLYNK_TEMPLATE_ID "TMPL62tTSqiQF"
+#define BLYNK_TEMPLATE_NAME "CDTN64130859"
+#define BLYNK_AUTH_TOKEN "wVv6n_FgoIGcb04UXyMwkf4100f8buFR"
 
 //khai bao thu vien
 #include <ESP8266WiFi.h>
